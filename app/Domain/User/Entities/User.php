@@ -99,7 +99,7 @@ class User
             $updatedFields['last_name'] = $lastName;
         }
         
-        if ($phone !== null && !$phone->equals($this->phone)) {
+        if ($phone !== null && ($this->phone === null || !$phone->equals($this->phone))) {
             $this->phone = $phone;
             $updatedFields['phone'] = $phone->value();
         }

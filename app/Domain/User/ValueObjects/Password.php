@@ -35,7 +35,16 @@ final readonly class Password
 
     public function hash(): string
     {
-        return password_hash($this->value, PASSWORD_ARGON2ID);
+        // Only hash if it's not already hashed
+        if (!$this->isHashed()) {
+            return password_hash($this->value, PASSWORD_ARGON2ID);
+        }
+        return $this->value;
+    }
+
+    private function isHashed(): bool
+    {
+        return password_get_info($this->value)['algo'] !== null;
     }
 
     public function verify(string $plainText): bool
