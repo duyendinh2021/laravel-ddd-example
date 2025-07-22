@@ -72,6 +72,98 @@ This project follows a strict DDD architecture with four main layers:
 
 The API will be available at `http://localhost:8000/api/v1`
 
+## 🐳 Docker Installation (Recommended)
+
+### Development Environment
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/duyendinh2021/laravel-ddd-example.git
+   cd laravel-ddd-example
+   ```
+
+2. **Setup environment**
+   ```bash
+   # Copy Docker development environment
+   cp .env.docker.dev .env
+   ```
+
+3. **Build and start development containers**
+   ```bash
+   # Using Make commands (recommended)
+   make dev-build
+   make dev-up
+   
+   # Or using docker compose directly
+   docker compose build
+   docker compose up -d
+   ```
+
+4. **Install dependencies and setup database**
+   ```bash
+   make dev-install    # Install composer dependencies
+   make dev-migrate    # Run database migrations
+   
+   # Or manually:
+   docker compose exec app composer install
+   docker compose exec app php artisan key:generate
+   docker compose exec app php artisan migrate:fresh --seed
+   ```
+
+4. **Access the application**
+   - API: `http://localhost:8000/api/v1`
+   - MailHog (email testing): `http://localhost:8025`
+
+### Production Deployment
+
+1. **Configure environment variables**
+   ```bash
+   cp .env.docker .env
+   # Edit .env with your production values (database passwords, SMTP settings, etc.)
+   ```
+
+2. **Build and deploy**
+   ```bash
+   make prod-build
+   make prod-up
+   
+   # Or using docker compose:
+   docker compose -f docker-compose.prod.yml build
+   docker compose -f docker-compose.prod.yml up -d
+   ```
+
+3. **Initialize production database**
+   ```bash
+   make prod-shell
+   php artisan key:generate
+   php artisan migrate
+   exit
+   ```
+
+### Docker Services
+
+The Docker setup includes:
+- **app**: Laravel application with PHP 8.3-FPM
+- **webserver**: Nginx web server
+- **db**: MySQL 8.0 database
+- **redis**: Redis cache and sessions
+- **mailhog**: Email testing (development only)
+
+### Available Make Commands
+
+```bash
+make help           # Show available commands
+make dev-build      # Build development containers
+make dev-up         # Start development environment
+make dev-down       # Stop development environment
+make dev-logs       # Show development logs
+make dev-shell      # Access container shell
+make dev-test       # Run tests
+make prod-build     # Build production containers  
+make prod-up        # Start production environment
+make clean          # Clean Docker resources
+```
+
 ## 📚 API Documentation
 
 ### Authentication Endpoints

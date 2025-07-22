@@ -16,3 +16,8 @@ yarn-error.log
 /.vscode
 /database/database.sqlite-journal
 /database/database.sqlite-wal
+
+# Docker
+.env.docker
+.env.docker.dev
+docker-compose.override.yml

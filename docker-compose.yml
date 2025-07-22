@@ -1,0 +1,75 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: laravel-ddd-app-dev
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - laravel-ddd
+    depends_on:
+      - db
+      - redis
+
+  webserver:
+    image: nginx:alpine
+    container_name: laravel-ddd-webserver-dev
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www/html
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - laravel-ddd
+    depends_on:
+      - app
+
+  db:
+    image: mysql:8.0
+    container_name: laravel-ddd-db-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: laravel_ddd_dev
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_PASSWORD: password
+      MYSQL_USER: laravel
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "3306:3306"
+    networks:
+      - laravel-ddd
+
+  redis:
+    image: redis:alpine
+    container_name: laravel-ddd-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - laravel-ddd
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: laravel-ddd-mailhog-dev
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - laravel-ddd
+
+volumes:
+  dbdata:
+    driver: local
+
+networks:
+  laravel-ddd:
+    driver: bridge
