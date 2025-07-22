@@ -49,7 +49,10 @@ final readonly class Password
 
     public function verify(string $plainText): bool
     {
-        return password_verify($plainText, $this->value);
+        if ($this->isHashed()) {
+            return password_verify($plainText, $this->value);
+        }
+        return $plainText === $this->value;
     }
 
     public function value(): string

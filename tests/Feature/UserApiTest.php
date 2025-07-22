@@ -18,7 +18,7 @@ class UserApiTest extends TestCase
             'password' => 'SecurePass123!',
             'first_name' => 'John',
             'last_name' => 'Doe',
-            'phone' => '+84123456789',
+            'phone' => '+84987654321',
             'role' => 'user'
         ];
 
@@ -92,7 +92,8 @@ class UserApiTest extends TestCase
             'email' => 'john@example.com',
             'password' => 'SecurePass123!',
             'first_name' => 'John',
-            'last_name' => 'Doe'
+            'last_name' => 'Doe',
+            'phone' => '+84987654321'
         ];
         $this->postJson('/api/v1/register', $userData);
 
