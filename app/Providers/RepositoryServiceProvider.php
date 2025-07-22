@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Domain\User\Contracts\UserRepositoryInterface;
-use App\Infrastructure\Repositories\UserRepository;
+use App\Infrastructure\Repositories\UserRepositoryEloquent;
 use App\Domain\User\Services\UserDomainService;
 use App\Domain\User\Services\PasswordService;
 use App\Application\Handlers\RegisterUserHandler;
@@ -27,7 +27,7 @@ class RepositoryServiceProvider extends ServiceProvider
         // Repository bindings
         $this->app->bind(
             UserRepositoryInterface::class,
-            UserRepository::class
+            UserRepositoryEloquent::class
         );
 
         // Domain services

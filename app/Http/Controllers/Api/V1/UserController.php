@@ -1,239 +1,114 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Http\Controllers\Api\V1;
 
-use App\Application\Commands\RegisterUserCommand;
-use App\Application\Commands\UpdateUserCommand;
-use App\Application\Commands\DeactivateUserCommand;
-use App\Application\Queries\GetUserQuery;
-use App\Application\Queries\GetUsersQuery;
-use App\Application\Services\UserApplicationService;
-use App\Application\Services\AuthenticationService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RegisterUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Requests\LoginUserRequest;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\UserDetailResource;
-use App\Infrastructure\Persistence\Models\UserModel;
-use Illuminate\Http\JsonResponse;
+use App\Domain\User\Contracts\UserRepositoryInterface;
+use App\Infrastructure\Criteria\ActiveUsersCriteria;
+use App\Infrastructure\Criteria\UsersByRoleCriteria;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\Auth;
-use InvalidArgumentException;
+use Illuminate\Http\JsonResponse;
+use Prettus\Validator\Exceptions\ValidatorException;
 
-class UserController extends Controller
+class UserController extends Controller 
 {
     public function __construct(
-        private UserApplicationService $userApplicationService,
-        private AuthenticationService $authenticationService
+        private UserRepositoryInterface $userRepository
     ) {}
 
     /**
-     * Display a listing of users.
+     * Display a listing of users
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request): JsonResponse
     {
-        $query = new GetUsersQuery(
-            role: $request->get('role'),
-            isActive: $request->boolean('is_active'),
-            isVerified: $request->boolean('is_verified'),
-            page: (int)$request->get('page', 1),
-            perPage: (int)$request->get('per_page', 10)
+        // RequestCriteria will automatically apply filters from query params
+        // URL: /api/v1/users?role=admin&status=active&search=john&per_page=10
+        
+        if ($request->has('role')) {
+            $this->userRepository->pushCriteria(
+                new UsersByRoleCriteria($request->role)
+            );
+        }
+        
+        if ($request->boolean('only_active')) {
+            $this->userRepository->pushCriteria(new ActiveUsersCriteria());
+        }
+        
+        $users = $this->userRepository->paginate(
+            $request->get('per_page', 15)
         );
-
-        $users = $this->userApplicationService->getUsers($query);
-
-        return UserResource::collection($users);
+        
+        return response()->json($users);
     }
 
     /**
-     * Store a newly created user.
+     * Store a new user
      */
     public function store(RegisterUserRequest $request): JsonResponse
     {
         try {
-            $command = new RegisterUserCommand(
-                username: $request->validated('username'),
-                email: $request->validated('email'),
-                password: $request->validated('password'),
-                firstName: $request->validated('first_name'),
-                lastName: $request->validated('last_name'),
-                phone: $request->validated('phone'),
-                role: $request->validated('role', 'user')
-            );
-
-            $user = $this->userApplicationService->registerUser($command);
-
+            $user = $this->userRepository->create($request->validated());
+            return response()->json($user, 201);
+        } catch (ValidatorException $e) {
             return response()->json([
-                'success' => true,
-                'message' => 'User registered successfully',
-                'data' => new UserResource($user),
-            ], 201);
-
-        } catch (InvalidArgumentException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
+                'error' => 'Validation failed',
+                'errors' => $e->getMessageBag()
             ], 422);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Registration failed',
-                'error' => $e->getMessage(),
-            ], 500);
         }
     }
 
     /**
-     * Display the specified user.
+     * Show user detail
      */
-    public function show(int $id): JsonResponse
+    public function show(string $id): JsonResponse  
     {
-        $query = new GetUserQuery($id);
-        $user = $this->userApplicationService->getUser($query);
+        $user = $this->userRepository->find($id);
+        return response()->json($user);
+    }
 
-        if (!$user) {
+    /**
+     * Update user
+     */
+    public function update(string $id, UpdateUserRequest $request): JsonResponse
+    {
+        try {
+            $user = $this->userRepository->update($request->validated(), $id);
+            return response()->json($user);
+        } catch (ValidatorException $e) {
             return response()->json([
-                'success' => false,
-                'message' => 'User not found',
-            ], 404);
+                'error' => 'Validation failed',
+                'errors' => $e->getMessageBag()
+            ], 422);
         }
+    }
 
+    /**
+     * Delete user
+     */
+    public function destroy(string $id): JsonResponse
+    {
+        $deleted = $this->userRepository->delete($id);
+        
         return response()->json([
-            'success' => true,
-            'data' => new UserDetailResource($user),
+            'message' => 'User deleted successfully',
+            'deleted' => $deleted
         ]);
     }
 
     /**
-     * Update the specified user.
-     */
-    public function update(UpdateUserRequest $request, int $id): JsonResponse
-    {
-        try {
-            $command = new UpdateUserCommand(
-                userId: $id,
-                firstName: $request->validated('first_name'),
-                lastName: $request->validated('last_name'),
-                phone: $request->validated('phone'),
-                profileImageUrl: $request->validated('profile_image_url'),
-                timezone: $request->validated('timezone'),
-                language: $request->validated('language')
-            );
-
-            $user = $this->userApplicationService->updateUser($command);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'User updated successfully',
-                'data' => new UserResource($user),
-            ]);
-
-        } catch (InvalidArgumentException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 422);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Update failed',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * Remove the specified user (soft delete via deactivation).
-     */
-    public function destroy(int $id): JsonResponse
-    {
-        try {
-            $command = new DeactivateUserCommand($id, 'Account deleted via API');
-            $user = $this->userApplicationService->deactivateUser($command);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'User deactivated successfully',
-                'data' => new UserResource($user),
-            ]);
-
-        } catch (InvalidArgumentException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 422);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Deactivation failed',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * Authenticate user and return token.
+     * Login user
      */
     public function login(LoginUserRequest $request): JsonResponse
     {
-        try {
-            $user = $this->authenticationService->authenticate(
-                $request->validated('email'),
-                $request->validated('password')
-            );
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid credentials',
-                ], 401);
-            }
-
-            // Create a Sanctum token for API authentication
-            $userModel = UserModel::where('email', $user->getEmail()->value())->first();
-            $token = $userModel->createToken('api-token')->plainTextToken;
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Login successful',
-                'data' => [
-                    'user' => new UserResource($user),
-                    'token' => $token,
-                ],
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Login failed',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * Logout user and revoke token.
-     */
-    public function logout(Request $request): JsonResponse
-    {
-        try {
-            $request->user()->currentAccessToken()->delete();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Logout successful',
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Logout failed',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+        // Implementation for authentication
+        // This would typically be handled by AuthenticationService
+        return response()->json([
+            'message' => 'Login endpoint - to be implemented with AuthenticationService'
+        ]);
     }
 }

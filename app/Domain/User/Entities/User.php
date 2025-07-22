@@ -8,6 +8,9 @@ use App\Domain\User\ValueObjects\Email;
 use App\Domain\User\ValueObjects\Password;
 use App\Domain\User\ValueObjects\Phone;
 use App\Domain\User\ValueObjects\Role;
+use App\Domain\Shared\ValueObjects\Id;
+use App\Domain\Shared\ValueObjects\Status;
+use App\Domain\Shared\ValueObjects\Timestamp;
 use App\Domain\User\Events\UserRegistered;
 use App\Domain\User\Events\UserUpdated;
 use App\Domain\User\Events\UserLoggedIn;
@@ -301,5 +304,118 @@ class User
     public function isAdmin(): bool
     {
         return $this->role->isAdmin();
+    }
+
+    // New methods for compatibility with UserRepositoryEloquent
+    public function id(): ?Id
+    {
+        return $this->userId ? Id::fromString((string)$this->userId) : null;
+    }
+
+    public function email(): Email
+    {
+        return $this->email;
+    }
+
+    public function password(): Password
+    {
+        return $this->password;
+    }
+
+    public function firstName(): string
+    {
+        return $this->firstName;
+    }
+
+    public function lastName(): string
+    {
+        return $this->lastName;
+    }
+
+    public function phone(): ?Phone
+    {
+        return $this->phone;
+    }
+
+    public function role(): Role
+    {
+        return $this->role;
+    }
+
+    public function status(): Status
+    {
+        // Map boolean isActive to Status value object
+        return $this->isActive ? Status::active() : Status::inactive();
+    }
+
+    public static function fromState(
+        Id $id,
+        Email $email,
+        Password $password,
+        string $firstName,
+        string $lastName,
+        ?Phone $phone,
+        Role $role,
+        Status $status,
+        Timestamp $createdAt,
+        Timestamp $updatedAt
+    ): self {
+        return new self(
+            userId: (int)$id->value(),
+            username: '', // username can be derived from email or set separately
+            email: $email,
+            password: $password,
+            firstName: $firstName,
+            lastName: $lastName,
+            phone: $phone,
+            isActive: $status->isActive(),
+            isVerified: true, // default value
+            emailVerifiedAt: null,
+            role: $role,
+            createdAt: $createdAt->value(),
+            updatedAt: $updatedAt->value(),
+            lastLoginAt: null,
+            profileImageUrl: null,
+            timezone: 'Asia/Ho_Chi_Minh',
+            language: 'vi',
+            passwordSalt: null
+        );
+    }
+
+    public static function create(
+        Email $email,
+        Password $password,
+        string $firstName,
+        string $lastName,
+        ?Phone $phone = null,
+        Role $role = null
+    ): self {
+        $role = $role ?? Role::USER;
+        $now = new DateTimeImmutable();
+        
+        $user = new self(
+            userId: null,
+            username: $email->value(), // Use email as username by default
+            email: $email,
+            password: $password,
+            firstName: $firstName,
+            lastName: $lastName,
+            phone: $phone,
+            isActive: true,
+            isVerified: false,
+            emailVerifiedAt: null,
+            role: $role,
+            createdAt: $now,
+            updatedAt: $now,
+            lastLoginAt: null,
+            profileImageUrl: null,
+            timezone: 'Asia/Ho_Chi_Minh',
+            language: 'vi',
+            passwordSalt: null
+        );
+        
+        $user->addEvent(UserRegistered::create($user->userId ?? 0, $email->value()));
+        
+        return $user;
     }
 }
